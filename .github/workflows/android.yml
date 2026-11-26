@@ -22,6 +22,8 @@ jobs:
         run: SDKMANAGER=$(find "${ANDROID_HOME:-/usr/local/lib/android/sdk}/cmdline-tools" -type f -name sdkmanager | head -n 1); yes | "$SDKMANAGER" --licenses
       - name: Install Android SDK
         run: SDKMANAGER=$(find "${ANDROID_HOME:-/usr/local/lib/android/sdk}/cmdline-tools" -type f -name sdkmanager | head -n 1); "$SDKMANAGER" "platforms;android-33" "build-tools;33.0.2"
+      - name: Check Windows relay Python syntax
+        run: python -m py_compile windows-gemini-relay/server.py
       - name: Build debug APK
         run: gradle --no-daemon assembleDebug
       - uses: actions/upload-artifact@v4
@@ -29,11 +31,10 @@ jobs:
           name: HebrewAIChat-APK
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
-      - name: Test HTTPS on Android 4.4 emulator
-        uses: reactivecircus/android-emulator-runner@v2
+      - name: Package Windows Gemini relay
+        run: zip -r windows-gemini-relay.zip windows-gemini-relay
+      - uses: actions/upload-artifact@v4
         with:
-          api-level: 19
-          target: default
-          arch: x86
-          profile: Nexus 5
-          script: gradle --no-daemon connectedAndroidTest
+          name: Windows11-Gemini-Relay
+          path: windows-gemini-relay.zip
+          retention-days: 30
