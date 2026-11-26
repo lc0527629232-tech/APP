@@ -51,8 +51,8 @@ public class MainActivity extends Activity {
       if(key.length()==0){settings();Toast.makeText(this,"יש להגדיר מפתח API לספק שנבחר",Toast.LENGTH_LONG).show();return;}input.setText("");bubble(q,true);try{JSONObject m=new JSONObject();m.put("role","user");m.put("content",q);history.put(m);save();}catch(Exception e){}status.setText("●  חושב...");new Thread(()->ask(key,q)).start();}
     void ask(String key,String q){HttpURLConnection c=null;try{
       String provider=prefs.getString("provider","openai");
-      String model=prefs.getString("model",provider.equals("gemini")?"gemini-3.8-flash":"gpt-4o-mini");
-      String endpoint=prefs.getString("endpoint",provider.equals("gemini")?"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent":"https://api.openai.com/v1/chat/completions");
+      String model=prefs.getString("gemini".equals(provider)?"model_gemini":"model_openai","gemini".equals(provider)?"gemini-2.5-flash":"gpt-4o-mini");
+      String endpoint=prefs.getString("gemini".equals(provider)?"endpoint_gemini":"endpoint_openai","gemini".equals(provider)?"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent":"https://api.openai.com/v1/chat/completions");
       c=(HttpURLConnection)new URL(endpoint).openConnection();c.setRequestMethod("POST");c.setConnectTimeout(25000);c.setReadTimeout(60000);c.setDoOutput(true);c.setRequestProperty("Content-Type","application/json");
       JSONObject body=new JSONObject();
       if("gemini".equals(provider)){
