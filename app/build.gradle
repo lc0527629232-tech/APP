@@ -16,3 +16,23 @@ android {
         targetCompatibility JavaVersion.VERSION_1_8
     }
 }
+
+// Refresh Google's officially published CA roots at build time. This avoids pinning
+// a single root certificate while supporting legacy Android system trust stores.
+tasks.register("downloadGoogleRoots") {
+    def rootsFile = file("src/main/res/raw/google_roots.pem")
+    outputs.file(rootsFile)
+    doLast {
+        rootsFile.parentFile.mkdirs()
+        new URL("https://pki.goog/roots.pem").withInputStream { input ->
+            rootsFile.withOutputStream { output -> output << input }
+        }
+        if (!rootsFile.exists() || rootsFile.length() < 1000) {
+            throw new GradleException("Google CA root bundle download failed")
+        }
+    }
+}
+
+tasks.named("preBuild").configure {
+    dependsOn("downloadGoogleRoots")
+}
