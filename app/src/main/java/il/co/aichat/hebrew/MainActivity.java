@@ -47,11 +47,48 @@ public class MainActivity extends Activity {
     void welcome(){TextView title=text("שלום! 👋",25,ink,true);title.setGravity(Gravity.RIGHT);title.setPadding(4,22,4,4);messages.addView(title);TextView sub=text("אני כאן כדי לעזור לך לחשוב, ללמוד, ליצור ולפתור בעיות. במה נתחיל?",15,muted,false);sub.setGravity(Gravity.RIGHT);sub.setPadding(4,4,4,20);messages.addView(sub);String[] tips={"הסבר לי נושא מורכב בפשטות","עזור לי לכתוב משהו","תן לי רעיונות לפרויקט"};for(String s:tips){TextView t=text("✧  "+s,14,purple,true);t.setGravity(Gravity.RIGHT);t.setPadding(14,14,14,14);t.setBackground(shape(Color.WHITE,18));LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.bottomMargin=9;messages.addView(t,p);t.setOnClickListener(v->{input.setText(s);send();});}}
     void bubble(String s,boolean user){TextView t=text(s,15,user?Color.WHITE:ink,false);t.setTextIsSelectable(true);t.setGravity(Gravity.RIGHT);t.setPadding(15,12,15,12);t.setBackground(shape(user?purple:Color.WHITE,18));LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.leftMargin=user?42:0;p.rightMargin=user?0:42;p.bottomMargin=10;messages.addView(t,p);scroll.post(()->scroll.fullScroll(View.FOCUS_DOWN));}
     void send(){String q=input.getText().toString().trim();if(q.length()==0)return;String key=prefs.getString("key","");if(key.length()==0){settings();Toast.makeText(this,"יש להגדיר מפתח API תחילה",Toast.LENGTH_LONG).show();return;}input.setText("");bubble(q,true);try{JSONObject m=new JSONObject();m.put("role","user");m.put("content",q);history.put(m);save();}catch(Exception e){}status.setText("●  חושב...");new Thread(()->ask(key,q)).start();}
-    void ask(String key,String q){HttpURLConnection c=null;try{String endpoint=prefs.getString("endpoint","https://api.openai.com/v1/chat/completions");String model=prefs.getString("model","gpt-4o-mini");c=(HttpURLConnection)new URL(endpoint).openConnection();c.setRequestMethod("POST");c.setConnectTimeout(25000);c.setReadTimeout(60000);c.setDoOutput(true);c.setRequestProperty("Content-Type","application/json");c.setRequestProperty("Authorization","Bearer "+key);
-      JSONObject body=new JSONObject();body.put("model",model);body.put("messages",history);body.put("temperature",0.7);OutputStream os=c.getOutputStream();os.write(body.toString().getBytes("UTF-8"));os.close();int code=c.getResponseCode();InputStream is=code>=200&&code<300?c.getInputStream():c.getErrorStream();ByteArrayOutputStream out=new ByteArrayOutputStream();byte[] buf=new byte[4096];int n;while((n=is.read(buf))>0)out.write(buf,0,n);is.close();JSONObject response=new JSONObject(new String(out.toByteArray(),"UTF-8"));if(code<200||code>=300)throw new Exception(response.optJSONObject("error")!=null?response.getJSONObject("error").optString("message","שגיאת שרת"):("HTTP "+code));String answer=response.getJSONArray("choices").getJSONObject(0).getJSONObject("message").getString("content");JSONObject a=new JSONObject();a.put("role","assistant");a.put("content",answer);history.put(a);save();runOnUiThread(()->{bubble(answer,false);status.setText("●  מוכן לשיחה");});}
-      catch(Exception e){String err="לא הצלחתי לקבל תשובה: "+e.getMessage()+"\nבדקו חיבור לאינטרנט ואת הגדרות ה־API.";runOnUiThread(()->{bubble(err,false);status.setText("●  נדרשת בדיקה");});}
+    void ask(String key,String q){HttpURLConnection c=null;try{
+      String provider=prefs.getString("provider","openai");
+      String model=prefs.getString("model",provider.equals("gemini")?"gemini-2.0-flash":"gpt-4o-mini");
+      String endpoint=prefs.getString("endpoint",provider.equals("gemini")?"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent":"https://api.openai.com/v1/chat/completions");
+      c=(HttpURLConnection)new URL(endpoint).openConnection();c.setRequestMethod("POST");c.setConnectTimeout(25000);c.setReadTimeout(60000);c.setDoOutput(true);c.setRequestProperty("Content-Type","application/json");
+      JSONObject body=new JSONObject();
+      if("gemini".equals(provider)){
+        c.setRequestProperty("x-goog-api-key",key);
+        JSONArray contents=new JSONArray();
+        for(int i=0;i<history.length();i++){
+          JSONObject item=history.getJSONObject(i);String role=item.optString("role");
+          if(!"user".equals(role)&&!"assistant".equals(role))continue;
+          JSONObject part=new JSONObject();part.put("text",item.optString("content"));
+          JSONObject content=new JSONObject();content.put("role","assistant".equals(role)?"model":"user");content.put("parts",new JSONArray().put(part));contents.put(content);
+        }
+        body.put("contents",contents);
+        JSONObject generation=new JSONObject();generation.put("temperature",0.7);body.put("generationConfig",generation);
+      } else {
+        c.setRequestProperty("Authorization","Bearer "+key);
+        body.put("model",model);body.put("messages",history);body.put("temperature",0.7);
+      }
+      OutputStream os=c.getOutputStream();os.write(body.toString().getBytes("UTF-8"));os.close();int code=c.getResponseCode();InputStream is=code>=200&&code<300?c.getInputStream():c.getErrorStream();ByteArrayOutputStream out=new ByteArrayOutputStream();byte[] buf=new byte[4096];int n;while((n=is.read(buf))>0)out.write(buf,0,n);is.close();JSONObject response=new JSONObject(new String(out.toByteArray(),"UTF-8"));
+      if(code<200||code>=300)throw new Exception(response.optJSONObject("error")!=null?response.getJSONObject("error").optString("message","שגיאת שרת"):("HTTP "+code));
+      String answer;
+      if("gemini".equals(provider)){
+        JSONArray candidates=response.getJSONArray("candidates");JSONObject candidate=candidates.getJSONObject(0);JSONArray parts=candidate.getJSONObject("content").getJSONArray("parts");StringBuilder sb=new StringBuilder();for(int i=0;i<parts.length();i++)sb.append(parts.getJSONObject(i).optString("text",""));answer=sb.toString();
+      } else answer=response.getJSONArray("choices").getJSONObject(0).getJSONObject("message").getString("content");
+      JSONObject a=new JSONObject();a.put("role","assistant");a.put("content",answer);history.put(a);save();runOnUiThread(()->{bubble(answer,false);status.setText("●  מוכן לשיחה");});
+      }catch(Exception e){String err="לא הצלחתי לקבל תשובה: "+e.getMessage()+"\\nבדקו חיבור לאינטרנט ואת הגדרות ה־API.";runOnUiThread(()->{bubble(err,false);status.setText("●  נדרשת בדיקה");});}
       finally{if(c!=null)c.disconnect();}}
     void save(){prefs.edit().putString("history",history.toString()).apply();}
     void load(){try{if(history.length()==0){welcome();return;}for(int i=0;i<history.length();i++){JSONObject m=history.getJSONObject(i);bubble(m.optString("content"),"user".equals(m.optString("role")));}}catch(Exception e){history=new JSONArray();welcome();}}
-    void settings(){LinearLayout box=new LinearLayout(this);box.setPadding(20,8,20,4);box.setOrientation(1);EditText k=new EditText(this);k.setHint("מפתח API");k.setSingleLine(true);k.setInputType(129);k.setText(prefs.getString("key",""));box.addView(k);EditText ep=new EditText(this);ep.setHint("כתובת API");ep.setSingleLine(true);ep.setText(prefs.getString("endpoint","https://api.openai.com/v1/chat/completions"));box.addView(ep);EditText mo=new EditText(this);mo.setHint("שם המודל");mo.setSingleLine(true);mo.setText(prefs.getString("model","gpt-4o-mini"));box.addView(mo);new AlertDialog.Builder(this).setTitle("הגדרות חיבור AI").setMessage("נדרש מפתח API מספק שירות AI. המפתח נשמר במכשיר בלבד.").setView(box).setNegativeButton("ביטול",null).setPositiveButton("שמירה",(d,w)->prefs.edit().putString("key",k.getText().toString().trim()).putString("endpoint",ep.getText().toString().trim()).putString("model",mo.getText().toString().trim()).apply()).show();}
+    void settings(){
+      LinearLayout box=new LinearLayout(this);box.setPadding(20,8,20,4);box.setOrientation(1);
+      TextView providerLabel=text("ספק הבינה המלאכותית",13,ink,true);box.addView(providerLabel);
+      Spinner provider=new Spinner(this);String[] providers={"OpenAI","Google Gemini"};provider.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,providers));provider.setSelection("gemini".equals(prefs.getString("provider","openai"))?1:0);box.addView(provider);
+      EditText k=new EditText(this);k.setHint("מפתח API");k.setSingleLine(true);k.setInputType(129);k.setText(prefs.getString("key",""));box.addView(k);
+      EditText ep=new EditText(this);ep.setHint("כתובת API");ep.setSingleLine(true);box.addView(ep);
+      EditText mo=new EditText(this);mo.setHint("שם המודל");mo.setSingleLine(true);box.addView(mo);
+      Runnable defaults=()->{boolean gemini=provider.getSelectedItemPosition()==1;ep.setText(prefs.getString("endpoint",gemini?"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent":"https://api.openai.com/v1/chat/completions"));mo.setText(prefs.getString("model",gemini?"gemini-2.0-flash":"gpt-4o-mini"));};
+      provider.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){public void onNothingSelected(android.widget.AdapterView<?> p){} public void onItemSelected(android.widget.AdapterView<?> p,View v,int pos,long id){boolean gemini=pos==1;ep.setText(gemini?"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent":"https://api.openai.com/v1/chat/completions");mo.setText(gemini?"gemini-2.0-flash":"gpt-4o-mini");}});
+      defaults.run();
+      new AlertDialog.Builder(this).setTitle("הגדרות חיבור AI").setMessage("בחרו ספק והזינו מפתח API מתאים. המפתח נשמר במכשיר בלבד.").setView(box).setNegativeButton("ביטול",null).setPositiveButton("שמירה",(d,w)->{String p=provider.getSelectedItemPosition()==1?"gemini":"openai";prefs.edit().putString("provider",p).putString("key",k.getText().toString().trim()).putString("endpoint",ep.getText().toString().trim()).putString("model",mo.getText().toString().trim()).apply();Toast.makeText(this,"ההגדרות נשמרו",Toast.LENGTH_SHORT).show();}).show();
+    }
 }
