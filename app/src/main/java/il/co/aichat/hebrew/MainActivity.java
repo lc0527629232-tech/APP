@@ -46,7 +46,9 @@ public class MainActivity extends Activity {
     }
     void welcome(){TextView title=text("שלום! 👋",25,ink,true);title.setGravity(Gravity.RIGHT);title.setPadding(4,22,4,4);messages.addView(title);TextView sub=text("אני כאן כדי לעזור לך לחשוב, ללמוד, ליצור ולפתור בעיות. במה נתחיל?",15,muted,false);sub.setGravity(Gravity.RIGHT);sub.setPadding(4,4,4,20);messages.addView(sub);String[] tips={"הסבר לי נושא מורכב בפשטות","עזור לי לכתוב משהו","תן לי רעיונות לפרויקט"};for(String s:tips){TextView t=text("✧  "+s,14,purple,true);t.setGravity(Gravity.RIGHT);t.setPadding(14,14,14,14);t.setBackground(shape(Color.WHITE,18));LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.bottomMargin=9;messages.addView(t,p);t.setOnClickListener(v->{input.setText(s);send();});}}
     void bubble(String s,boolean user){TextView t=text(s,15,user?Color.WHITE:ink,false);t.setTextIsSelectable(true);t.setGravity(Gravity.RIGHT);t.setPadding(15,12,15,12);t.setBackground(shape(user?purple:Color.WHITE,18));LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.leftMargin=user?42:0;p.rightMargin=user?0:42;p.bottomMargin=10;messages.addView(t,p);scroll.post(()->scroll.fullScroll(View.FOCUS_DOWN));}
-    void send(){String q=input.getText().toString().trim();if(q.length()==0)return;String key=prefs.getString("key","");if(key.length()==0){settings();Toast.makeText(this,"יש להגדיר מפתח API תחילה",Toast.LENGTH_LONG).show();return;}input.setText("");bubble(q,true);try{JSONObject m=new JSONObject();m.put("role","user");m.put("content",q);history.put(m);save();}catch(Exception e){}status.setText("●  חושב...");new Thread(()->ask(key,q)).start();}
+    void send(){String q=input.getText().toString().trim();if(q.length()==0)return;String provider=prefs.getString("provider","openai");
+      String key=prefs.getString("gemini".equals(provider)?"key_gemini":"key_openai","");
+      if(key.length()==0){settings();Toast.makeText(this,"יש להגדיר מפתח API לספק שנבחר",Toast.LENGTH_LONG).show();return;}input.setText("");bubble(q,true);try{JSONObject m=new JSONObject();m.put("role","user");m.put("content",q);history.put(m);save();}catch(Exception e){}status.setText("●  חושב...");new Thread(()->ask(key,q)).start();}
     void ask(String key,String q){HttpURLConnection c=null;try{
       String provider=prefs.getString("provider","openai");
       String model=prefs.getString("model",provider.equals("gemini")?"gemini-3.8-flash":"gpt-4o-mini");
@@ -80,15 +82,51 @@ public class MainActivity extends Activity {
     void save(){prefs.edit().putString("history",history.toString()).apply();}
     void load(){try{if(history.length()==0){welcome();return;}for(int i=0;i<history.length();i++){JSONObject m=history.getJSONObject(i);bubble(m.optString("content"),"user".equals(m.optString("role")));}}catch(Exception e){history=new JSONArray();welcome();}}
     void settings(){
-      LinearLayout box=new LinearLayout(this);box.setPadding(20,8,20,4);box.setOrientation(1);
-      TextView providerLabel=text("ספק הבינה המלאכותית",13,ink,true);box.addView(providerLabel);
-      Spinner provider=new Spinner(this);String[] providers={"OpenAI","Google Gemini"};provider.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,providers));provider.setSelection("gemini".equals(prefs.getString("provider","openai"))?1:0);box.addView(provider);
-      EditText k=new EditText(this);k.setHint("מפתח API");k.setSingleLine(true);k.setInputType(129);k.setText(prefs.getString("key",""));box.addView(k);
-      EditText ep=new EditText(this);ep.setHint("כתובת API");ep.setSingleLine(true);box.addView(ep);
-      EditText mo=new EditText(this);mo.setHint("שם המודל");mo.setSingleLine(true);box.addView(mo);
-      Runnable defaults=()->{boolean gemini=provider.getSelectedItemPosition()==1;ep.setText(prefs.getString("endpoint",gemini?"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent":"https://api.openai.com/v1/chat/completions"));mo.setText(prefs.getString("model",gemini?"gemini-3.8-flash":"gpt-4o-mini"));};
-      provider.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){public void onNothingSelected(android.widget.AdapterView<?> p){} public void onItemSelected(android.widget.AdapterView<?> p,View v,int pos,long id){boolean gemini=pos==1;ep.setText(gemini?"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent":"https://api.openai.com/v1/chat/completions");mo.setText(gemini?"gemini-3.8-flash":"gpt-4o-mini");}});
-      defaults.run();
-      new AlertDialog.Builder(this).setTitle("הגדרות חיבור AI").setMessage("בחרו ספק והזינו מפתח API מתאים. המפתח נשמר במכשיר בלבד.").setView(box).setNegativeButton("ביטול",null).setPositiveButton("שמירה",(d,w)->{String p=provider.getSelectedItemPosition()==1?"gemini":"openai";prefs.edit().putString("provider",p).putString("key",k.getText().toString().trim()).putString("endpoint",ep.getText().toString().trim()).putString("model",mo.getText().toString().trim()).apply();Toast.makeText(this,"ההגדרות נשמרו",Toast.LENGTH_SHORT).show();}).show();
+      // Preserve an older single key as the OpenAI key during upgrade.
+      if(!prefs.contains("key_openai") && prefs.contains("key")) {
+        prefs.edit().putString("key_openai",prefs.getString("key","")).apply();
+      }
+      final String geminiDefaultUrl="https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
+      final String openaiDefaultUrl="https://api.openai.com/v1/chat/completions";
+      ScrollView scroller=new ScrollView(this);
+      LinearLayout box=new LinearLayout(this);box.setPadding(18,8,18,8);box.setOrientation(1);scroller.addView(box);
+      TextView activeTitle=text("באיזה שירות להשתמש בצ׳אט?",14,ink,true);box.addView(activeTitle);
+      Spinner provider=new Spinner(this);
+      String[] providers={"GPT – OpenAI","Gemini – Google"};
+      provider.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,providers));
+      provider.setSelection("gemini".equals(prefs.getString("provider","openai"))?1:0);
+      box.addView(provider);
+      TextView note=text("בחרו את השירות הפעיל. לכל שירות יש מפתח API והגדרות נפרדים.",12,muted,false);
+      note.setPadding(0,4,0,12);box.addView(note);
+
+      TextView gTitle=text("① Google Gemini",16,Color.rgb(66,133,244),true);gTitle.setPadding(0,10,0,4);box.addView(gTitle);
+      TextView gDesc=text("מפתח API של Google AI Studio",12,muted,false);box.addView(gDesc);
+      EditText gKey=new EditText(this);gKey.setSingleLine(true);gKey.setInputType(129);gKey.setHint("הדבק כאן מפתח Gemini");gKey.setText(prefs.getString("key_gemini",""));box.addView(gKey);
+      EditText gModel=new EditText(this);gModel.setSingleLine(true);gModel.setHint("מודל Gemini");gModel.setText(prefs.getString("model_gemini","gemini-2.5-flash"));box.addView(gModel);
+      EditText gUrl=new EditText(this);gUrl.setSingleLine(true);gUrl.setTextSize(12);gUrl.setHint("כתובת API של Gemini");gUrl.setText(prefs.getString("endpoint_gemini",geminiDefaultUrl));box.addView(gUrl);
+
+      View separator=new View(this);separator.setBackgroundColor(Color.rgb(225,228,238));LinearLayout.LayoutParams sep=new LinearLayout.LayoutParams(-1,1);sep.topMargin=14;sep.bottomMargin=8;box.addView(separator,sep);
+      TextView oTitle=text("② GPT – OpenAI",16,Color.rgb(16,163,127),true);oTitle.setPadding(0,6,0,4);box.addView(oTitle);
+      TextView oDesc=text("מפתח API של OpenAI",12,muted,false);box.addView(oDesc);
+      EditText oKey=new EditText(this);oKey.setSingleLine(true);oKey.setInputType(129);oKey.setHint("הדבק כאן מפתח GPT");oKey.setText(prefs.getString("key_openai",""));box.addView(oKey);
+      EditText oModel=new EditText(this);oModel.setSingleLine(true);oModel.setHint("מודל GPT");oModel.setText(prefs.getString("model_openai","gpt-4o-mini"));box.addView(oModel);
+      EditText oUrl=new EditText(this);oUrl.setSingleLine(true);oUrl.setTextSize(12);oUrl.setHint("כתובת API של OpenAI");oUrl.setText(prefs.getString("endpoint_openai",openaiDefaultUrl));box.addView(oUrl);
+      TextView privacy=text("המפתחות נשמרים בנפרד במכשיר שלך ואינם נכתבים למאגר GitHub.",11,muted,false);privacy.setPadding(0,12,0,4);box.addView(privacy);
+
+      new AlertDialog.Builder(this).setTitle("הגדרות שירותי AI").setView(scroller)
+        .setNegativeButton("ביטול",null)
+        .setPositiveButton("שמירת ההגדרות",(d,w)->{
+          String active=provider.getSelectedItemPosition()==1?"gemini":"openai";
+          prefs.edit()
+            .putString("provider",active)
+            .putString("key_gemini",gKey.getText().toString().trim())
+            .putString("model_gemini",gModel.getText().toString().trim())
+            .putString("endpoint_gemini",gUrl.getText().toString().trim())
+            .putString("key_openai",oKey.getText().toString().trim())
+            .putString("model_openai",oModel.getText().toString().trim())
+            .putString("endpoint_openai",oUrl.getText().toString().trim())
+            .apply();
+          Toast.makeText(this,"ההגדרות נשמרו",Toast.LENGTH_SHORT).show();
+        }).show();
     }
 }
