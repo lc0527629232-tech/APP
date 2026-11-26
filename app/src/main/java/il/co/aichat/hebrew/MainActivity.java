@@ -86,7 +86,7 @@ public class MainActivity extends Activity {
       if("gemini-2.5-flash".equals(savedGeminiModel) || savedGeminiModel.length()==0)
         prefs.edit().putString("model_gemini","gemini-3.8-flash").apply();
       String savedGeminiEndpoint=prefs.getString("endpoint_gemini","");
-      if(savedGeminiEndpoint.length()==0 || savedGeminiEndpoint.equals("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent"))
+      if(savedGeminiEndpoint.length()==0 || savedGeminiEndpoint.equals("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"))
         prefs.edit().putString("endpoint_gemini","https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent").apply();
       try { history=new JSONArray(prefs.getString("history","[]")); } catch(Exception e) { history=new JSONArray(); }
       build();
@@ -120,7 +120,7 @@ public class MainActivity extends Activity {
       String provider=prefs.getString("provider","openai");
       String model=prefs.getString("gemini".equals(provider)?"model_gemini":"model_openai","gemini".equals(provider)?"gemini-3.8-flash":"gpt-4o-mini");
       boolean relay="gemini".equals(provider) && prefs.getBoolean("gemini_proxy",false);
-      String endpoint=relay?prefs.getString("gemini_proxy_url","http://192.168.1.100:8765/gemini"):prefs.getString("gemini".equals(provider)?"endpoint_gemini":"endpoint_openai","gemini".equals(provider)?"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent":"https://api.openai.com/v1/chat/completions");
+      String endpoint=relay?prefs.getString("gemini_proxy_url","http://192.168.1.100:8765/gemini"):prefs.getString("gemini".equals(provider)?"endpoint_gemini":"endpoint_openai","gemini".equals(provider)?"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent":"https://api.openai.com/v1/chat/completions");
       c=(HttpURLConnection)new URL(endpoint).openConnection();if(c instanceof HttpsURLConnection)enableTls12((HttpsURLConnection)c,"gemini".equals(provider));c.setRequestMethod("POST");c.setConnectTimeout(25000);c.setReadTimeout(60000);c.setDoOutput(true);c.setRequestProperty("Content-Type","application/json");
       if(relay){c.setRequestProperty("X-Relay-Token",prefs.getString("gemini_proxy_token",""));c.setRequestProperty("X-Gemini-Model",model);}
       JSONObject body=new JSONObject();
@@ -155,7 +155,7 @@ public class MainActivity extends Activity {
       if(!prefs.contains("key_openai") && prefs.contains("key")) {
         prefs.edit().putString("key_openai",prefs.getString("key","")).apply();
       }
-      final String geminiDefaultUrl="https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
+      final String geminiDefaultUrl="https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent";
       final String openaiDefaultUrl="https://api.openai.com/v1/chat/completions";
       ScrollView scroller=new ScrollView(this);
       LinearLayout box=new LinearLayout(this);box.setPadding(18,8,18,8);box.setOrientation(1);scroller.addView(box);
@@ -171,7 +171,7 @@ public class MainActivity extends Activity {
       TextView gTitle=text("① Google Gemini",16,Color.rgb(66,133,244),true);gTitle.setPadding(0,10,0,4);box.addView(gTitle);
       TextView gDesc=text("מפתח API של Google AI Studio",12,muted,false);box.addView(gDesc);
       EditText gKey=new EditText(this);gKey.setSingleLine(true);gKey.setInputType(129);gKey.setHint("הדבק כאן מפתח Gemini");gKey.setText(prefs.getString("key_gemini",""));box.addView(gKey);
-      EditText gModel=new EditText(this);gModel.setSingleLine(true);gModel.setHint("מודל Gemini");gModel.setText(prefs.getString("model_gemini","gemini-2.5-flash"));box.addView(gModel);
+      EditText gModel=new EditText(this);gModel.setSingleLine(true);gModel.setHint("מודל Gemini");gModel.setText(prefs.getString("model_gemini","gemini-3.8-flash"));box.addView(gModel);
       EditText gUrl=new EditText(this);gUrl.setSingleLine(true);gUrl.setTextSize(12);gUrl.setHint("כתובת API של Gemini");gUrl.setText(prefs.getString("endpoint_gemini",geminiDefaultUrl));box.addView(gUrl);
       CheckBox proxy=new CheckBox(this);proxy.setText("להתחבר ל-Gemini דרך מחשב Windows");proxy.setTextSize(13);proxy.setChecked(prefs.getBoolean("gemini_proxy",false));box.addView(proxy);
       TextView proxyInfo=text("הפעלת השרת במחשב עוקפת את מגבלת תעודות האבטחה של הטלפון. הטלפון והמחשב צריכים להיות באותה רשת Wi-Fi.",11,muted,false);proxyInfo.setPadding(0,3,0,3);box.addView(proxyInfo);
