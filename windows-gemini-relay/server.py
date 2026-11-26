@@ -54,8 +54,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.reply(404, {"error": {"message": "Unknown endpoint"}})
             return
         cfg = self.server.config
-        if not secrets.compare_digest(self.headers.get("X-Relay-Token", ""), cfg["relay_token"]):
-            self.reply(401, {"error": {"message": "קוד הגישה לשרת שגוי"}})
+        if not secrets.compare_digest(self.headers.get("X-Relay-Token", "").strip(), cfg["relay_token"].strip()):
+            print("[RELAY AUTH ERROR] קוד הגישה שהגיע מהטלפון אינו תואם לקוד שנוצר במחשב.", flush=True)
+            self.reply(401, {"error": {"message": "קוד הגישה לשרת שגוי. העתיקו מחדש את הקוד מחלון השרת."}})
             return
         try:
             size = int(self.headers.get("Content-Length", "0"))
@@ -84,7 +85,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
             except urllib.error.HTTPError as e:
                 # Preserve Google's HTTP status and response body for diagnosis.
                 result = e.read(LIMIT)
-                print("Gemini HTTP error: %s %s" % (e.code, e.reason), flush=True)
+                try:
+                    error_json = json.loads(result.decode("utf-8"))
+                    detail = error_json.get("error", {}).get("message", e.reason)
+                except Exception:
+                    detail = result.decode("utf-8", errors="replace")[:500]
+                print("[GEMINI API ERROR] HTTP %s: %s" % (e.code, detail), flush=True)
                 self.send_response(e.code)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.send_header("Content-Length", str(len(result)))
