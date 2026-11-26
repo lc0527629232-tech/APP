@@ -81,6 +81,13 @@ public class MainActivity extends Activity {
       super.onCreate(b);
       // Keep the window setup compatible with Android 4.1.2 (API 16).
       prefs=getSharedPreferences("chat",0);
+      // Migrate the old Gemini default to a currently recommended model for new API projects.
+      String savedGeminiModel=prefs.getString("model_gemini","gemini-3.8-flash");
+      if("gemini-2.5-flash".equals(savedGeminiModel) || savedGeminiModel.length()==0)
+        prefs.edit().putString("model_gemini","gemini-3.8-flash").apply();
+      String savedGeminiEndpoint=prefs.getString("endpoint_gemini","");
+      if(savedGeminiEndpoint.length()==0 || savedGeminiEndpoint.equals("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent"))
+        prefs.edit().putString("endpoint_gemini","https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent").apply();
       try { history=new JSONArray(prefs.getString("history","[]")); } catch(Exception e) { history=new JSONArray(); }
       build();
       load();
@@ -111,7 +118,7 @@ public class MainActivity extends Activity {
       if(key.length()==0 && !relay){settings();Toast.makeText(this,"יש להגדיר מפתח API או להפעיל שרת מחשב",Toast.LENGTH_LONG).show();return;}input.setText("");bubble(q,true);try{JSONObject m=new JSONObject();m.put("role","user");m.put("content",q);history.put(m);save();}catch(Exception e){}status.setText("●  חושב...");new Thread(()->ask(key,q)).start();}
     void ask(String key,String q){HttpURLConnection c=null;try{
       String provider=prefs.getString("provider","openai");
-      String model=prefs.getString("gemini".equals(provider)?"model_gemini":"model_openai","gemini".equals(provider)?"gemini-2.5-flash":"gpt-4o-mini");
+      String model=prefs.getString("gemini".equals(provider)?"model_gemini":"model_openai","gemini".equals(provider)?"gemini-3.8-flash":"gpt-4o-mini");
       boolean relay="gemini".equals(provider) && prefs.getBoolean("gemini_proxy",false);
       String endpoint=relay?prefs.getString("gemini_proxy_url","http://192.168.1.100:8765/gemini"):prefs.getString("gemini".equals(provider)?"endpoint_gemini":"endpoint_openai","gemini".equals(provider)?"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent":"https://api.openai.com/v1/chat/completions");
       c=(HttpURLConnection)new URL(endpoint).openConnection();if(c instanceof HttpsURLConnection)enableTls12((HttpsURLConnection)c,"gemini".equals(provider));c.setRequestMethod("POST");c.setConnectTimeout(25000);c.setReadTimeout(60000);c.setDoOutput(true);c.setRequestProperty("Content-Type","application/json");
