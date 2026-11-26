@@ -20,13 +20,7 @@ public class MainActivity extends Activity {
     final int ink=Color.rgb(30,38,58), muted=Color.rgb(112,124,145), purple=Color.rgb(99,82,220);
     public void onCreate(Bundle b){
       super.onCreate(b);
-      if (Build.VERSION.SDK_INT >= 21) {
-        getWindow().setStatusBarColor(Color.rgb(246,247,252));
-        getWindow().setNavigationBarColor(Color.rgb(246,247,252));
-      }
-      if (Build.VERSION.SDK_INT >= 23) {
-        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
-      }
+      // Keep the window setup compatible with Android 4.4 (API 19).
       prefs=getSharedPreferences("chat",0);
       try { history=new JSONArray(prefs.getString("history","[]")); } catch(Exception e) { history=new JSONArray(); }
       build();
