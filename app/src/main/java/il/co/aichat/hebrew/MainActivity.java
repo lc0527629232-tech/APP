@@ -13,8 +13,38 @@ import org.json.*;
 import java.net.*;
 import java.io.*;
 import java.util.*;
+import javax.net.ssl.*;
+import java.security.*;
 
 public class MainActivity extends Activity {
+    // Android 4.4 supports TLS 1.2 but does not enable it by default for client sockets.
+    static class Tls12SocketFactory extends SSLSocketFactory {
+      private final SSLSocketFactory delegate;
+      Tls12SocketFactory(SSLSocketFactory factory){delegate=factory;}
+      private Socket tune(Socket socket){
+        if(socket instanceof SSLSocket){
+          SSLSocket ssl=(SSLSocket)socket;
+          try {
+            Set<String> supported=new HashSet<String>(Arrays.asList(ssl.getSupportedProtocols()));
+            if(supported.contains("TLSv1.2")) ssl.setEnabledProtocols(new String[]{"TLSv1.2"});
+          } catch(Exception ignored){}
+        }
+        return socket;
+      }
+      public String[] getDefaultCipherSuites(){return delegate.getDefaultCipherSuites();}
+      public String[] getSupportedCipherSuites(){return delegate.getSupportedCipherSuites();}
+      public Socket createSocket(Socket s,String host,int port,boolean autoClose)throws IOException{return tune(delegate.createSocket(s,host,port,autoClose));}
+      public Socket createSocket(String host,int port)throws IOException{return tune(delegate.createSocket(host,port));}
+      public Socket createSocket(String host,int port,java.net.InetAddress local,int localPort)throws IOException{return tune(delegate.createSocket(host,port,local,localPort));}
+      public Socket createSocket(java.net.InetAddress host,int port)throws IOException{return tune(delegate.createSocket(host,port));}
+      public Socket createSocket(java.net.InetAddress address,int port,java.net.InetAddress local,int localPort)throws IOException{return tune(delegate.createSocket(address,port,local,localPort));}
+    }
+    void enableTls12(HttpsURLConnection connection){
+      if(Build.VERSION.SDK_INT>=16 && Build.VERSION.SDK_INT<=19){
+        try { connection.setSSLSocketFactory(new Tls12SocketFactory((SSLSocketFactory)SSLSocketFactory.getDefault())); }
+        catch(Exception ignored){}
+      }
+    }
     LinearLayout root, messages; EditText input; ScrollView scroll; TextView status;
     android.content.SharedPreferences prefs; JSONArray history=new JSONArray();
     final int ink=Color.rgb(30,38,58), muted=Color.rgb(112,124,145), purple=Color.rgb(99,82,220);
@@ -53,7 +83,7 @@ public class MainActivity extends Activity {
       String provider=prefs.getString("provider","openai");
       String model=prefs.getString("gemini".equals(provider)?"model_gemini":"model_openai","gemini".equals(provider)?"gemini-2.5-flash":"gpt-4o-mini");
       String endpoint=prefs.getString("gemini".equals(provider)?"endpoint_gemini":"endpoint_openai","gemini".equals(provider)?"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent":"https://api.openai.com/v1/chat/completions");
-      c=(HttpURLConnection)new URL(endpoint).openConnection();c.setRequestMethod("POST");c.setConnectTimeout(25000);c.setReadTimeout(60000);c.setDoOutput(true);c.setRequestProperty("Content-Type","application/json");
+      c=(HttpURLConnection)new URL(endpoint).openConnection();if(c instanceof HttpsURLConnection)enableTls12((HttpsURLConnection)c);c.setRequestMethod("POST");c.setConnectTimeout(25000);c.setReadTimeout(60000);c.setDoOutput(true);c.setRequestProperty("Content-Type","application/json");
       JSONObject body=new JSONObject();
       if("gemini".equals(provider)){
         c.setRequestProperty("x-goog-api-key",key);
