@@ -24,6 +24,14 @@ jobs:
         run: SDKMANAGER=$(find "${ANDROID_HOME:-/usr/local/lib/android/sdk}/cmdline-tools" -type f -name sdkmanager | head -n 1); "$SDKMANAGER" "platforms;android-33" "build-tools;33.0.2"
       - name: Build debug APK
         run: gradle --no-daemon assembleDebug
+      - name: Test HTTPS on Android 4.4 emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 19
+          target: default
+          arch: x86
+          profile: Nexus 5
+          script: gradle --no-daemon connectedAndroidTest
       - uses: actions/upload-artifact@v4
         with:
           name: HebrewAIChat-APK
