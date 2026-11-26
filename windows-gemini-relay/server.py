@@ -1,4 +1,4 @@
-import http.server, json, os, secrets, socket, urllib.error, urllib.parse, urllib.request
+import getpass, http.server, json, os, secrets, socket, urllib.error, urllib.parse, urllib.request
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 CONFIG = os.path.join(BASE, "config.json")
@@ -12,7 +12,7 @@ def load_config():
         if c.get("gemini_api_key") and c.get("relay_token"):
             return c
     print("\nהגדרה ראשונית של שרת Gemini")
-    key = input("הדבק מפתח Gemini API ולחץ Enter: ").strip()
+    key = getpass.getpass("הדבק מפתח Gemini API (הטקסט יוסתר): ").strip()
     if not key:
         raise SystemExit("לא הוזן מפתח API")
     token = secrets.token_urlsafe(24)
@@ -64,7 +64,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return
             body = self.rfile.read(size)
             json.loads(body.decode("utf-8"))
-            model = self.headers.get("X-Gemini-Model", "gemini-2.5-flash").strip()
+            model = self.headers.get("X-Gemini-Model", "gemini-3.8-flash").strip()
             if not model or any(ch not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-" for ch in model):
                 raise ValueError("שם המודל אינו תקין")
             url = "https://generativelanguage.googleapis.com/v1beta/models/" + urllib.parse.quote(model, safe="._-") + ":generateContent"
