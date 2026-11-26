@@ -1,9 +1,20 @@
-import getpass, http.server, json, os, secrets, socket, urllib.error, urllib.parse, urllib.request
+import getpass, http.server, json, os, secrets, socket, ssl, urllib.error, urllib.parse, urllib.request
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 CONFIG = os.path.join(BASE, "config.json")
 PORT = 8765
 LIMIT = 1024 * 1024
+
+def make_gemini_ssl_context():
+    # Keep normal CA-chain and hostname verification enabled.
+    # Some Windows CA stores contain legacy CA certificates that fail OpenSSL's
+    # optional X509_STRICT checks (for example, a missing keyUsage extension).
+    # Disable only that extra strictness check; do NOT disable certificate validation.
+    context = ssl.create_default_context()
+    strict_flag = getattr(ssl, "VERIFY_X509_STRICT", 0)
+    if strict_flag:
+        context.verify_flags &= ~strict_flag
+    return context
 
 def load_config():
     if os.path.exists(CONFIG):
@@ -72,30 +83,29 @@ class Handler(http.server.BaseHTTPRequestHandler):
             req = urllib.request.Request(url, data=body, method="POST", headers={
                 "Content-Type": "application/json",
                 "x-goog-api-key": cfg["gemini_api_key"],
-                "User-Agent": "WindowsGeminiRelay/1.1"
+                "User-Agent": "WindowsGeminiRelay/1.2"
             })
-            try:
-                with urllib.request.urlopen(req, timeout=70) as response:
-                    result = response.read(LIMIT)
-                    self.send_response(response.status)
-                    self.send_header("Content-Type", "application/json; charset=utf-8")
-                    self.send_header("Content-Length", str(len(result)))
-                    self.end_headers()
-                    self.wfile.write(result)
-            except urllib.error.HTTPError as e:
-                # Preserve Google's HTTP status and response body for diagnosis.
-                result = e.read(LIMIT)
-                try:
-                    error_json = json.loads(result.decode("utf-8"))
-                    detail = error_json.get("error", {}).get("message", e.reason)
-                except Exception:
-                    detail = result.decode("utf-8", errors="replace")[:500]
-                print("[GEMINI API ERROR] HTTP %s: %s" % (e.code, detail), flush=True)
-                self.send_response(e.code)
+            with urllib.request.urlopen(req, timeout=70, context=make_gemini_ssl_context()) as response:
+                result = response.read(LIMIT)
+                self.send_response(response.status)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.send_header("Content-Length", str(len(result)))
                 self.end_headers()
                 self.wfile.write(result)
+        except urllib.error.HTTPError as e:
+            # Preserve Google's HTTP status and response body for useful diagnostics.
+            result = e.read(LIMIT)
+            try:
+                error_json = json.loads(result.decode("utf-8"))
+                detail = error_json.get("error", {}).get("message", e.reason)
+            except Exception:
+                detail = result.decode("utf-8", errors="replace")[:500]
+            print("[GEMINI API ERROR] HTTP %s: %s" % (e.code, detail), flush=True)
+            self.send_response(e.code)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(result)))
+            self.end_headers()
+            self.wfile.write(result)
         except Exception as e:
             # Never print or return the API key or request headers.
             if isinstance(e, urllib.error.URLError):
