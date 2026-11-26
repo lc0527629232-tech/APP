@@ -15,8 +15,11 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '7.5'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
       - name: Accept Android SDK licenses
-        run: yes | sdkmanager --licenses || true
+        run: yes | sdkmanager --licenses
       - name: Install Android SDK
         run: sdkmanager "platforms;android-33" "build-tools;33.0.2"
       - name: Build debug APK
