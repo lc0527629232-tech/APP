@@ -71,7 +71,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             req = urllib.request.Request(url, data=body, method="POST", headers={
                 "Content-Type": "application/json",
                 "x-goog-api-key": cfg["gemini_api_key"],
-                "User-Agent": "WindowsGeminiRelay/1.0"
+                "User-Agent": "WindowsGeminiRelay/1.1"
             })
             try:
                 with urllib.request.urlopen(req, timeout=70) as response:
@@ -82,17 +82,28 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     self.end_headers()
                     self.wfile.write(result)
             except urllib.error.HTTPError as e:
+                # Preserve Google's HTTP status and response body for diagnosis.
                 result = e.read(LIMIT)
+                print("Gemini HTTP error: %s %s" % (e.code, e.reason), flush=True)
                 self.send_response(e.code)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.send_header("Content-Length", str(len(result)))
                 self.end_headers()
                 self.wfile.write(result)
         except Exception as e:
-            self.reply(502, {"error": {"message": str(e)}})
+            # Never print or return the API key or request headers.
+            if isinstance(e, urllib.error.URLError):
+                detail = "שגיאת חיבור ל-Gemini: " + str(e.reason)
+            else:
+                detail = type(e).__name__ + ": " + str(e)
+            print("Relay upstream failure: " + detail, flush=True)
+            try:
+                self.reply(502, {"error": {"message": detail}})
+            except (BrokenPipeError, ConnectionResetError):
+                pass
 
     def log_message(self, fmt, *args):
-        print("%s - %s" % (self.client_address[0], fmt % args))
+        print("%s - %s" % (self.client_address[0], fmt % args), flush=True)
 
 if __name__ == "__main__":
     cfg = load_config()
