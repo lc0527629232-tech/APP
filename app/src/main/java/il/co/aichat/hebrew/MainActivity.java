@@ -107,15 +107,18 @@ public class MainActivity extends Activity {
     void bubble(String s,boolean user){TextView t=text(s,15,user?Color.WHITE:ink,false);t.setTextIsSelectable(true);t.setGravity(Gravity.RIGHT);t.setPadding(15,12,15,12);t.setBackground(shape(user?purple:Color.WHITE,18));LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.leftMargin=user?42:0;p.rightMargin=user?0:42;p.bottomMargin=10;messages.addView(t,p);scroll.post(()->scroll.fullScroll(View.FOCUS_DOWN));}
     void send(){String q=input.getText().toString().trim();if(q.length()==0)return;String provider=prefs.getString("provider","openai");
       String key=prefs.getString("gemini".equals(provider)?"key_gemini":"key_openai","");
-      if(key.length()==0){settings();Toast.makeText(this,"יש להגדיר מפתח API לספק שנבחר",Toast.LENGTH_LONG).show();return;}input.setText("");bubble(q,true);try{JSONObject m=new JSONObject();m.put("role","user");m.put("content",q);history.put(m);save();}catch(Exception e){}status.setText("●  חושב...");new Thread(()->ask(key,q)).start();}
+      boolean relay="gemini".equals(provider) && prefs.getBoolean("gemini_proxy",false);
+      if(key.length()==0 && !relay){settings();Toast.makeText(this,"יש להגדיר מפתח API או להפעיל שרת מחשב",Toast.LENGTH_LONG).show();return;}input.setText("");bubble(q,true);try{JSONObject m=new JSONObject();m.put("role","user");m.put("content",q);history.put(m);save();}catch(Exception e){}status.setText("●  חושב...");new Thread(()->ask(key,q)).start();}
     void ask(String key,String q){HttpURLConnection c=null;try{
       String provider=prefs.getString("provider","openai");
       String model=prefs.getString("gemini".equals(provider)?"model_gemini":"model_openai","gemini".equals(provider)?"gemini-2.5-flash":"gpt-4o-mini");
-      String endpoint=prefs.getString("gemini".equals(provider)?"endpoint_gemini":"endpoint_openai","gemini".equals(provider)?"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent":"https://api.openai.com/v1/chat/completions");
+      boolean relay="gemini".equals(provider) && prefs.getBoolean("gemini_proxy",false);
+      String endpoint=relay?prefs.getString("gemini_proxy_url","http://192.168.1.100:8765/gemini"):prefs.getString("gemini".equals(provider)?"endpoint_gemini":"endpoint_openai","gemini".equals(provider)?"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent":"https://api.openai.com/v1/chat/completions");
       c=(HttpURLConnection)new URL(endpoint).openConnection();if(c instanceof HttpsURLConnection)enableTls12((HttpsURLConnection)c,"gemini".equals(provider));c.setRequestMethod("POST");c.setConnectTimeout(25000);c.setReadTimeout(60000);c.setDoOutput(true);c.setRequestProperty("Content-Type","application/json");
+      if(relay){c.setRequestProperty("X-Relay-Token",prefs.getString("gemini_proxy_token",""));c.setRequestProperty("X-Gemini-Model",model);}
       JSONObject body=new JSONObject();
       if("gemini".equals(provider)){
-        c.setRequestProperty("x-goog-api-key",key);
+        if(!relay)c.setRequestProperty("x-goog-api-key",key);
         JSONArray contents=new JSONArray();
         for(int i=0;i<history.length();i++){
           JSONObject item=history.getJSONObject(i);String role=item.optString("role");
@@ -163,6 +166,10 @@ public class MainActivity extends Activity {
       EditText gKey=new EditText(this);gKey.setSingleLine(true);gKey.setInputType(129);gKey.setHint("הדבק כאן מפתח Gemini");gKey.setText(prefs.getString("key_gemini",""));box.addView(gKey);
       EditText gModel=new EditText(this);gModel.setSingleLine(true);gModel.setHint("מודל Gemini");gModel.setText(prefs.getString("model_gemini","gemini-2.5-flash"));box.addView(gModel);
       EditText gUrl=new EditText(this);gUrl.setSingleLine(true);gUrl.setTextSize(12);gUrl.setHint("כתובת API של Gemini");gUrl.setText(prefs.getString("endpoint_gemini",geminiDefaultUrl));box.addView(gUrl);
+      CheckBox proxy=new CheckBox(this);proxy.setText("להתחבר ל-Gemini דרך מחשב Windows");proxy.setTextSize(13);proxy.setChecked(prefs.getBoolean("gemini_proxy",false));box.addView(proxy);
+      TextView proxyInfo=text("הפעלת השרת במחשב עוקפת את מגבלת תעודות האבטחה של הטלפון. הטלפון והמחשב צריכים להיות באותה רשת Wi-Fi.",11,muted,false);proxyInfo.setPadding(0,3,0,3);box.addView(proxyInfo);
+      EditText proxyUrl=new EditText(this);proxyUrl.setSingleLine(true);proxyUrl.setTextSize(12);proxyUrl.setHint("כתובת שרת במחשב, למשל http://192.168.1.20:8765/gemini");proxyUrl.setText(prefs.getString("gemini_proxy_url",""));box.addView(proxyUrl);
+      EditText proxyToken=new EditText(this);proxyToken.setSingleLine(true);proxyToken.setInputType(129);proxyToken.setHint("קוד גישה שמוצג בחלון השרת במחשב");proxyToken.setText(prefs.getString("gemini_proxy_token",""));box.addView(proxyToken);
 
       View separator=new View(this);separator.setBackgroundColor(Color.rgb(225,228,238));LinearLayout.LayoutParams sep=new LinearLayout.LayoutParams(-1,1);sep.topMargin=14;sep.bottomMargin=8;box.addView(separator,sep);
       TextView oTitle=text("② GPT – OpenAI",16,Color.rgb(16,163,127),true);oTitle.setPadding(0,6,0,4);box.addView(oTitle);
@@ -181,6 +188,9 @@ public class MainActivity extends Activity {
             .putString("key_gemini",gKey.getText().toString().trim())
             .putString("model_gemini",gModel.getText().toString().trim())
             .putString("endpoint_gemini",gUrl.getText().toString().trim())
+            .putBoolean("gemini_proxy",proxy.isChecked())
+            .putString("gemini_proxy_url",proxyUrl.getText().toString().trim())
+            .putString("gemini_proxy_token",proxyToken.getText().toString().trim())
             .putString("key_openai",oKey.getText().toString().trim())
             .putString("model_openai",oModel.getText().toString().trim())
             .putString("endpoint_openai",oUrl.getText().toString().trim())
