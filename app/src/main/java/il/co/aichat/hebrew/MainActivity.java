@@ -49,8 +49,8 @@ public class MainActivity extends Activity {
     void send(){String q=input.getText().toString().trim();if(q.length()==0)return;String key=prefs.getString("key","");if(key.length()==0){settings();Toast.makeText(this,"יש להגדיר מפתח API תחילה",Toast.LENGTH_LONG).show();return;}input.setText("");bubble(q,true);try{JSONObject m=new JSONObject();m.put("role","user");m.put("content",q);history.put(m);save();}catch(Exception e){}status.setText("●  חושב...");new Thread(()->ask(key,q)).start();}
     void ask(String key,String q){HttpURLConnection c=null;try{
       String provider=prefs.getString("provider","openai");
-      String model=prefs.getString("model",provider.equals("gemini")?"gemini-2.0-flash":"gpt-4o-mini");
-      String endpoint=prefs.getString("endpoint",provider.equals("gemini")?"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent":"https://api.openai.com/v1/chat/completions");
+      String model=prefs.getString("model",provider.equals("gemini")?"gemini-3.8-flash":"gpt-4o-mini");
+      String endpoint=prefs.getString("endpoint",provider.equals("gemini")?"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent":"https://api.openai.com/v1/chat/completions");
       c=(HttpURLConnection)new URL(endpoint).openConnection();c.setRequestMethod("POST");c.setConnectTimeout(25000);c.setReadTimeout(60000);c.setDoOutput(true);c.setRequestProperty("Content-Type","application/json");
       JSONObject body=new JSONObject();
       if("gemini".equals(provider)){
@@ -86,8 +86,8 @@ public class MainActivity extends Activity {
       EditText k=new EditText(this);k.setHint("מפתח API");k.setSingleLine(true);k.setInputType(129);k.setText(prefs.getString("key",""));box.addView(k);
       EditText ep=new EditText(this);ep.setHint("כתובת API");ep.setSingleLine(true);box.addView(ep);
       EditText mo=new EditText(this);mo.setHint("שם המודל");mo.setSingleLine(true);box.addView(mo);
-      Runnable defaults=()->{boolean gemini=provider.getSelectedItemPosition()==1;ep.setText(prefs.getString("endpoint",gemini?"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent":"https://api.openai.com/v1/chat/completions"));mo.setText(prefs.getString("model",gemini?"gemini-2.0-flash":"gpt-4o-mini"));};
-      provider.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){public void onNothingSelected(android.widget.AdapterView<?> p){} public void onItemSelected(android.widget.AdapterView<?> p,View v,int pos,long id){boolean gemini=pos==1;ep.setText(gemini?"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent":"https://api.openai.com/v1/chat/completions");mo.setText(gemini?"gemini-2.0-flash":"gpt-4o-mini");}});
+      Runnable defaults=()->{boolean gemini=provider.getSelectedItemPosition()==1;ep.setText(prefs.getString("endpoint",gemini?"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent":"https://api.openai.com/v1/chat/completions"));mo.setText(prefs.getString("model",gemini?"gemini-3.8-flash":"gpt-4o-mini"));};
+      provider.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){public void onNothingSelected(android.widget.AdapterView<?> p){} public void onItemSelected(android.widget.AdapterView<?> p,View v,int pos,long id){boolean gemini=pos==1;ep.setText(gemini?"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent":"https://api.openai.com/v1/chat/completions");mo.setText(gemini?"gemini-3.8-flash":"gpt-4o-mini");}});
       defaults.run();
       new AlertDialog.Builder(this).setTitle("הגדרות חיבור AI").setMessage("בחרו ספק והזינו מפתח API מתאים. המפתח נשמר במכשיר בלבד.").setView(box).setNegativeButton("ביטול",null).setPositiveButton("שמירה",(d,w)->{String p=provider.getSelectedItemPosition()==1?"gemini":"openai";prefs.edit().putString("provider",p).putString("key",k.getText().toString().trim()).putString("endpoint",ep.getText().toString().trim()).putString("model",mo.getText().toString().trim()).apply();Toast.makeText(this,"ההגדרות נשמרו",Toast.LENGTH_SHORT).show();}).show();
     }
