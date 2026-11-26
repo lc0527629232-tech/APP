@@ -19,9 +19,9 @@ jobs:
         with:
           packages: platform-tools
       - name: Accept Android SDK licenses
-        run: yes | sdkmanager --licenses
+        run: SDKMANAGER=$(find "${ANDROID_HOME:-/usr/local/lib/android/sdk}/cmdline-tools" -type f -name sdkmanager | head -n 1); yes | "$SDKMANAGER" --licenses
       - name: Install Android SDK
-        run: sdkmanager "platforms;android-33" "build-tools;33.0.2"
+        run: SDKMANAGER=$(find "${ANDROID_HOME:-/usr/local/lib/android/sdk}/cmdline-tools" -type f -name sdkmanager | head -n 1); "$SDKMANAGER" "platforms;android-33" "build-tools;33.0.2"
       - name: Build debug APK
         run: gradle --no-daemon assembleDebug
       - uses: actions/upload-artifact@v4
