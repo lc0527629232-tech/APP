@@ -17,7 +17,7 @@ import javax.net.ssl.*;
 import java.security.*;
 
 public class MainActivity extends Activity {
-    // Android 4.4 supports TLS 1.2 but does not enable it by default for client sockets.
+    // Android 4.x may support TLS 1.2 but leave it disabled by default; enable it when available.
     static class Tls12SocketFactory extends SSLSocketFactory {
       private final SSLSocketFactory delegate;
       Tls12SocketFactory(SSLSocketFactory factory){delegate=factory;}
@@ -31,6 +31,7 @@ public class MainActivity extends Activity {
         }
         return socket;
       }
+      public Socket createSocket() throws IOException{return tune(delegate.createSocket());}
       public String[] getDefaultCipherSuites(){return delegate.getDefaultCipherSuites();}
       public String[] getSupportedCipherSuites(){return delegate.getSupportedCipherSuites();}
       public Socket createSocket(Socket s,String host,int port,boolean autoClose)throws IOException{return tune(delegate.createSocket(s,host,port,autoClose));}
@@ -50,7 +51,7 @@ public class MainActivity extends Activity {
     final int ink=Color.rgb(30,38,58), muted=Color.rgb(112,124,145), purple=Color.rgb(99,82,220);
     public void onCreate(Bundle b){
       super.onCreate(b);
-      // Keep the window setup compatible with Android 4.4 (API 19).
+      // Keep the window setup compatible with Android 4.1.2 (API 16).
       prefs=getSharedPreferences("chat",0);
       try { history=new JSONArray(prefs.getString("history","[]")); } catch(Exception e) { history=new JSONArray(); }
       build();
