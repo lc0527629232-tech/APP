@@ -15,6 +15,7 @@ import java.io.*;
 import java.util.*;
 import javax.net.ssl.*;
 import java.security.*;
+import java.security.cert.*;
 
 public class MainActivity extends Activity {
     // Android 4.x may support TLS 1.2 but leave it disabled by default; enable it when available.
@@ -40,11 +41,38 @@ public class MainActivity extends Activity {
       public Socket createSocket(java.net.InetAddress host,int port)throws IOException{return tune(delegate.createSocket(host,port));}
       public Socket createSocket(java.net.InetAddress address,int port,java.net.InetAddress local,int localPort)throws IOException{return tune(delegate.createSocket(address,port,local,localPort));}
     }
-    void enableTls12(HttpsURLConnection connection){
-      if(Build.VERSION.SDK_INT>=16 && Build.VERSION.SDK_INT<=19){
-        try { connection.setSSLSocketFactory(new Tls12SocketFactory((SSLSocketFactory)SSLSocketFactory.getDefault())); }
-        catch(Exception ignored){}
+    // Gemini uses Google's published CA bundle in addition to the device trust store.
+    // Normal certificate-chain and hostname validation remain enabled.
+    SSLSocketFactory geminiSocketFactory() throws Exception {
+      KeyStore combined=KeyStore.getInstance(KeyStore.getDefaultType());
+      combined.load(null,null);
+      TrustManagerFactory systemTmf=TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+      systemTmf.init((KeyStore)null);
+      int index=0;
+      for(TrustManager tm:systemTmf.getTrustManagers()){
+        if(tm instanceof X509TrustManager){
+          for(X509Certificate cert:((X509TrustManager)tm).getAcceptedIssuers())
+            combined.setCertificateEntry("system-"+(index++),cert);
+        }
       }
+      CertificateFactory cf=CertificateFactory.getInstance("X.509");
+      InputStream roots=getResources().openRawResource(R.raw.google_roots);
+      try {
+        Collection<? extends java.security.cert.Certificate> certs=cf.generateCertificates(roots);
+        for(java.security.cert.Certificate cert:certs)
+          combined.setCertificateEntry("google-"+(index++),cert);
+      } finally { roots.close(); }
+      TrustManagerFactory tmf=TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+      tmf.init(combined);
+      SSLContext context=SSLContext.getInstance("TLS");
+      context.init(null,tmf.getTrustManagers(),new SecureRandom());
+      return context.getSocketFactory();
+    }
+    void enableTls12(HttpsURLConnection connection, boolean gemini) throws Exception {
+      SSLSocketFactory factory=gemini?geminiSocketFactory():(SSLSocketFactory)SSLSocketFactory.getDefault();
+      if(Build.VERSION.SDK_INT>=16 && Build.VERSION.SDK_INT<=19)
+        factory=new Tls12SocketFactory(factory);
+      connection.setSSLSocketFactory(factory);
     }
     LinearLayout root, messages; EditText input; ScrollView scroll; TextView status;
     android.content.SharedPreferences prefs; JSONArray history=new JSONArray();
@@ -84,7 +112,7 @@ public class MainActivity extends Activity {
       String provider=prefs.getString("provider","openai");
       String model=prefs.getString("gemini".equals(provider)?"model_gemini":"model_openai","gemini".equals(provider)?"gemini-2.5-flash":"gpt-4o-mini");
       String endpoint=prefs.getString("gemini".equals(provider)?"endpoint_gemini":"endpoint_openai","gemini".equals(provider)?"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent":"https://api.openai.com/v1/chat/completions");
-      c=(HttpURLConnection)new URL(endpoint).openConnection();if(c instanceof HttpsURLConnection)enableTls12((HttpsURLConnection)c);c.setRequestMethod("POST");c.setConnectTimeout(25000);c.setReadTimeout(60000);c.setDoOutput(true);c.setRequestProperty("Content-Type","application/json");
+      c=(HttpURLConnection)new URL(endpoint).openConnection();if(c instanceof HttpsURLConnection)enableTls12((HttpsURLConnection)c,"gemini".equals(provider));c.setRequestMethod("POST");c.setConnectTimeout(25000);c.setReadTimeout(60000);c.setDoOutput(true);c.setRequestProperty("Content-Type","application/json");
       JSONObject body=new JSONObject();
       if("gemini".equals(provider)){
         c.setRequestProperty("x-goog-api-key",key);
